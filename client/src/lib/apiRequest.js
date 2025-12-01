@@ -1,7 +1,8 @@
 // ...existing code...
 import axios from "axios";
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://85.215.173.47:8800";
+const API_BASE =
+  import.meta.env.VITE_API_URL || "http://85.215.173.47:8800/api";
 
 const api = axios.create({
   baseURL: API_BASE,
