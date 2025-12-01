@@ -9,12 +9,22 @@ export const SocketContextProvider = ({ children }) => {
   const [socket, setSocket] = useState(null);
 
   useEffect(() => {
-    setSocket(io("http://localhost:4000"));
-  }, []);
+    if (currentUser) {
+      const newSocket = io("http://85.215.173.47:4000");
+      setSocket(newSocket);
+
+      return () => {
+        newSocket.disconnect();
+      };
+    }
+  }, [currentUser]);
 
   useEffect(() => {
-    currentUser && socket?.emit("newUser", currentUser.id)
-  }, [currentUser, socket])
+    if (currentUser && socket) {
+      socket.emit("newUser", currentUser.id);
+    }
+  }, [currentUser, socket]);
+
   return (
     <SocketContext.Provider value={{ socket }}>
       {children}
