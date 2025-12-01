@@ -10,7 +10,7 @@ export const SocketContextProvider = ({ children }) => {
 
   useEffect(() => {
     if (currentUser) {
-      const newSocket = io("http://85.215.173.47:4000");
+      const newSocket = io("http://85.215.173.47", { path: "/socket.io" });
       setSocket(newSocket);
 
       return () => {
