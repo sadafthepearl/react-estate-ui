@@ -1,11 +1,7 @@
 import express from "express";
-import { login, logout, register } from "../controllers/auth.controller.js";
-import {
-  enable2FA,
-  verify2FA,
-  verifyLogin2FA,
-} from "../controllers/2fa.controller.js";
-import { verifyToken } from "../middlewares/auth.middleware.js";
+import { login, logout, register, enable2FA, verify2FA, verifyLogin2FA } from "../controllers/auth.controller.js";
+
+import { verifyToken } from "../middleware/verifyToken.js";
 
 const router = express.Router();
 
