@@ -21,7 +21,9 @@
     "jsonwebtoken": "^9.0.2",
     "lexical": "^0.36.2",
     "mongodb": "^6.18.0",
-    "prisma": "^5.11.0"
+    "prisma": "^5.11.0",
+    "qrcode": "^1.5.4",
+    "speakeasy": "^2.0.0"
   },
   "devDependencies": {
     "@types/bcrypt": "^6.0.0",

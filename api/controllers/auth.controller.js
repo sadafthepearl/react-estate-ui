@@ -1,13 +1,13 @@
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import prisma from "../lib/prisma.js";
+import speakeasy from "speakeasy";
+import qrcode from "qrcode";
 
 export const register = async (req, res) => {
   const { username, email, password } = req.body;
 
   try {
-    console.log("Entered password:", password);
-
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const newUser = await prisma.user.create({
@@ -17,8 +17,6 @@ export const register = async (req, res) => {
         password: hashedPassword,
       },
     });
-
-    console.log("New user created:", newUser);
 
     res.status(201).json({ message: "User created successfully!" });
   } catch (err) {
@@ -31,13 +29,9 @@ export const login = async (req, res) => {
   const { username, password } = req.body;
 
   try {
-    console.log("Looking for user:", username);
-
     const user = await prisma.user.findUnique({
       where: { username },
     });
-
-    console.log("Found user:", user);
 
     if (!user) {
       return res.status(401).json({ message: "Invalid Credentials!" });
@@ -49,8 +43,14 @@ export const login = async (req, res) => {
       return res.status(401).json({ message: "Invalid Credentials!" });
     }
 
-    // generate cookie and token and send to the user:
-    // res.setHeader("Set-Cookie", "test=" + "myValue").json("Success");
+    if (user.is2FAEnabled) {
+      return res.status(200).json({
+        message: "2FA Required",
+        is2FAEnabled: true,
+        userId: user.id,
+      });
+    }
+
     const age = 1000 * 60 * 60 * 24 * 7;
 
     const token = jwt.sign(
@@ -67,8 +67,6 @@ export const login = async (req, res) => {
     res
       .cookie("token", token, {
         httpOnly: true,
-        //this line below,means secure the url.but because this is localhost right now it is commented!but run it for the active mode
-        // secure:true
         maxAge: age,
       })
       .status(200)
@@ -79,6 +77,100 @@ export const login = async (req, res) => {
   }
 };
 
+export const enable2FA = async (req, res) => {
+  try {
+    const secret = speakeasy.generateSecret({
+      name: `EstateUI (${req.user.id})`,
+    });
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { twoFactorSecret: secret.base32 },
+    });
+
+    const qrCodeUrl = await qrcode.toDataURL(secret.otpauth_url);
+
+    res.status(200).json({
+      secret: secret.base32,
+      qrCode: qrCodeUrl,
+    });
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({ message: "Failed to enable 2FA!" });
+  }
+};
+
+export const verify2FA = async (req, res) => {
+  const { token } = req.body;
+  const userId = req.userId;
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+    });
+    const verified = speakeasy.totp.verify({
+      secret: user.twoFactorSecret,
+      encoding: "base32",
+      token: token,
+    });
+
+    if (verified) {
+      await prisma.user.update({
+        where: { id: userId },
+        data: { twoFactorEnabled: true },
+      });
+
+      res.status(200).json({ message: "2FA Enabled Successfully!" });
+    } else {
+      res.status(400).json({ message: "Invalid 2FA Token!" });
+    }
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({ message: "Failed to verify 2FA!" });
+  }
+};
+
+export const verifyLogin2FA = async (req, res) => {
+  const { userId, token } = req.body;
+
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    const verified = speakeasy.totp.verify({
+      secret: user.twoFactorSecret,
+      encoding: "base32",
+      token: token,
+    });
+
+    if (verified) {
+      const age = 1000 * 60 * 60 * 24 * 7;
+      const jwtToken = jwt.sign(
+        {
+          id: user.id,
+          isAdmin: false,
+        },
+        process.env.JWT_SECRET_KEY,
+        { expiresIn: age }
+      );
+
+      const { password: userPassword, ...userInfo } = user;
+
+      res
+        .cookie("token", jwtToken, {
+          httpOnly: true,
+          maxAge: age,
+        })
+        .status(200)
+        .json(userInfo);
+    } else {
+      res.status(400).json({ message: "Invalild 2FA token!" });
+    }
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({ message: "Failed to verify 2FA!" });
+  }
+};
 export const logout = (req, res) => {
   res.clearCookie("token").status(200).json({ message: "Logout Successful! " });
 };

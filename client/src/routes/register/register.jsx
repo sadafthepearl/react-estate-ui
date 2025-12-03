@@ -13,11 +13,25 @@ function Register() {
     e.preventDefault();
     setError("")
     setIsLoading(true);
+
     const formData = new FormData(e.target);
 
     const username = formData.get("username");
     const email = formData.get("email");
     const password = formData.get("password");
+    const confirmPassword = formData.get("confirmPassword");
+
+    if (password !== confirmPassword) {
+      setError("Passwords do not match!");
+      setIsLoading(false);
+      return
+    }
+
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters long!");
+      setIsLoading(false);
+      return
+    }
 
     try {
       const res = await apiRequest.post("/auth/register", {
