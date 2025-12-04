@@ -11,7 +11,7 @@ function Register() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError("")
+    setError("");
     setIsLoading(true);
 
     const formData = new FormData(e.target);
@@ -21,44 +21,66 @@ function Register() {
     const password = formData.get("password");
     const confirmPassword = formData.get("confirmPassword");
 
+    // Validate passwords match
     if (password !== confirmPassword) {
       setError("Passwords do not match!");
       setIsLoading(false);
-      return
+      return;
     }
 
+    // Validate password strength
     if (password.length < 8) {
       setError("Password must be at least 8 characters long!");
       setIsLoading(false);
-      return
+      return;
     }
 
     try {
-      const res = await apiRequest.post("/auth/register", {
+      await apiRequest.post("/auth/register", {
         username,
         email,
         password,
       });
 
-      console.log("Response object:", res)
-      console.log("Response data:", res?.data)
-
       navigate("/login");
     } catch (err) {
       setError(err.response?.data?.message || "Failed to create user!");
-      console.error("Register error:", err)
     } finally {
       setIsLoading(false);
     }
   };
+
   return (
     <div className="registerPage">
       <div className="formContainer">
         <form onSubmit={handleSubmit}>
           <h1>Create an Account</h1>
-          <input name="username" type="text" placeholder="Username" />
-          <input name="email" type="text" placeholder="Email" />
-          <input name="password" type="password" placeholder="Password" />
+          <input
+            name="username"
+            type="text"
+            placeholder="Username"
+            required
+          />
+          <input
+            name="email"
+            type="email"
+            placeholder="Email"
+            required
+          />
+          <input
+            name="password"
+            type="password"
+            placeholder="Password"
+            required
+            minLength={8}
+          />
+          <input
+            name="confirmPassword"
+            type="password"
+            placeholder="Confirm Password"
+            required
+            minLength={8}
+          />
           <button disabled={isLoading}>Register</button>
           {error && <span>{error}</span>}
           <Link to="/login">Do you have an account?</Link>
