@@ -3,11 +3,11 @@ import {
   login,
   logout,
   register,
+  loginWithEmail,
+  verifyEmailCode,
   enable2FA,
   verify2FA,
-  verifyLogin2FA,
-  loginWithEmail,
-  verifyEmailCode
+  verifyLogin2FA
 } from "../controllers/auth.controller.js";
 import { verifyToken } from "../middleware/verifyToken.js";
 
@@ -25,3 +25,4 @@ router.post("/verify-login-2fa", verifyLogin2FA);
 router.post("/logout", logout);
 
 export default router;
+

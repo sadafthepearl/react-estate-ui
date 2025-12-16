@@ -3,6 +3,82 @@ import jwt from "jsonwebtoken";
 import prisma from "../lib/prisma.js";
 import speakeasy from "speakeasy";
 import qrcode from "qrcode";
+import crypto from "crypto";
+import nodemailer from "nodemailer";
+
+const transporter = nodemailer.createTransport({
+  host: process.env.SMTP_HOST,
+  port: Number(process.env.SMTP_PORT || 587),
+  secure: false,
+  auth: {
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS,
+  },
+});
+
+export const loginWithEmail = async (req, res) => {
+  const { email } = req.body;
+
+  try {
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    const code = crypto.randomInt(100000, 999999).toString();
+    const expires = new Date(Date.now() + 10 * 60 * 1000);
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { emailLoginCode: code, emailLoginExpires: expires },
+    });
+
+    await transporter.sendMail({
+      from: process.env.MAIL_FROM,
+      to: email,
+      subject: "Your login code",
+      html: `<p>Your login code is: <b>${code}</b></p><p>Expires in 10 minutes.</p>`,
+    });
+
+    res.json({ message: "Login code sent" });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ message: "Failed to send code" });
+  }
+};
+
+export const verifyEmailCode = async (req, res) => {
+  const { email, code } = req.body;
+
+  try {
+    const user = await prisma.user.findFirst({
+      where: {
+        email,
+        emailLoginCode: code,
+        emailLoginExpires: { gt: new Date() },
+      },
+    });
+
+    if (!user) return res.status(400).json({ message: "Invalid/expired code" });
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { emailLoginCode: null, emailLoginExpires: null },
+    });
+
+    const age = 1000 * 60 * 60 * 24 * 7;
+    const token = jwt.sign(
+      { id: user.id, isAdmin: false },
+      process.env.JWT_SECRET_KEY,
+      { expiresIn: age }
+    );
+
+    const { password, ...userInfo } = user;
+
+    res.cookie("token", token, { httpOnly: true, maxAge: age }).json(userInfo);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ message: "Login failed" });
+  }
+};
 
 export const register = async (req, res) => {
   const { username, email, password } = req.body;
@@ -22,6 +98,44 @@ export const register = async (req, res) => {
   } catch (err) {
     console.error("Prisma Error:", err);
     res.status(500).json({ message: "Failed to create user!" });
+  }
+};
+
+export const sendMagicLink = async (req, res) => {
+  const { email } = req.body;
+
+  try {
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user) return res.status(404).json({ message: "User not found!" });
+
+    const token = crypto.randomBytes(32).toString("hex");
+    const hashedToken = await bcrypt.hash(token, 10);
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        magicLoginToken: hashedToken,
+        magicLoginExpires: new Date(Date.now() + 10 * 60 * 1000),
+      },
+    });
+
+    const magicLink = `${process.env.APP_URL}/auth/magic-login?token=${token}`;
+
+    await transporter.sendMail({
+      from: process.env.MAIL_FROM,
+      to: email,
+      subject: "Your magic login link",
+      html: `
+        <p>Click the link below to log in:</p>
+        <a href="${magicLink}">${magicLink}</a>
+        <p>This link expires in 10 minutes.</p>
+      `,
+    });
+
+    res.json({ message: "Magic link sent to email!" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Failed to send magic link!" });
   }
 };
 
