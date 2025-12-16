@@ -1,0 +1,15 @@
+# env
+.env
+api/.env
+
+# deps
+node_modules/
+api/node_modules/
+
+# prisma generated
+api/node_modules/.prisma/
+api/node_modules/@prisma/client/
+
+# logs
+*.log
+
