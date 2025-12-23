@@ -1,32 +1,43 @@
+import http from "http";
 import { Server } from "socket.io";
+import dotenv from "dotenv";
 
-const io = new Server({
+dotenv.config();
+
+const PORT = process.env.SOCKET_PORT || 4000;
+
+const server = http.createServer();
+
+const io = new Server(server, {
   cors: {
-    origin: "http://localhost:5173",
+    origin: process.env.CLIENT_URL,
+    methods: ["GET", "POST"],
+    credentials: true,
   },
 });
 
-let onLineUser = [];
+let onlineUsers = [];
 
 const addUser = (userId, socketId) => {
-  const userExits = onLineUser.find((user) => user.userId === userId);
-  if (!userExits) {
-    onLineUser.push({ userId, socketId });
+  if (!onlineUsers.find((u) => u.userId === userId)) {
+    onlineUsers.push({ userId, socketId });
   }
 };
 
 const removeUser = (socketId) => {
-  onLineUser = onLineUser.filter((user) => user.socketId !== socketId);
+  onlineUsers = onlineUsers.filter((u) => u.socketId !== socketId);
 };
 
 const getUser = (userId) => {
-  return onLineUser.find((user) => user.userId === userId);
+  return onlineUsers.find((u) => u.userId === userId);
 };
 
 io.on("connection", (socket) => {
+  console.log("🟢 Socket connected:", socket.id);
+
   socket.on("newUser", (userId) => {
     addUser(userId, socket.id);
-    console.log("Online Users:", onLineUser);
+    io.emit("onlineUsers", onlineUsers);
   });
 
   socket.on("sendMessage", ({ receiverId, data }) => {
@@ -38,7 +49,11 @@ io.on("connection", (socket) => {
 
   socket.on("disconnect", () => {
     removeUser(socket.id);
+    io.emit("onlineUsers", onlineUsers);
+    console.log("🔴 Socket disconnected:", socket.id);
   });
 });
 
-io.listen(4000);
+server.listen(PORT, () => {
+  console.log(`⚡ Socket.IO running on port ${PORT}`);
+});
