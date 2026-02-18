@@ -3,11 +3,13 @@ import {
   login,
   logout,
   register,
-  loginWithEmail,
-  verifyEmailCode,
   enable2FA,
   verify2FA,
-  verifyLogin2FA
+  verifyLogin2FA,
+  loginWithEmail,
+  verifyEmailCode,
+  sendMagicLink,
+  consumeMagicLink,
 } from "../controllers/auth.controller.js";
 import { verifyToken } from "../middleware/verifyToken.js";
 
@@ -19,10 +21,16 @@ router.post("/login", login);
 router.post("/login-email", loginWithEmail);
 router.post("/verify-email-code", verifyEmailCode);
 
+router.get("/magic-link", sendMagicLink);
+
+router.get("/magic-link/consume", consumeMagicLink);
+
+router.post("/magic-link", sendMagicLink);
+
 router.post("/enable-2fa", verifyToken, enable2FA);
 router.post("/verify-2fa", verifyToken, verify2FA);
 router.post("/verify-login-2fa", verifyLogin2FA);
+
 router.post("/logout", logout);
 
 export default router;
-
