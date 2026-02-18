@@ -136,18 +136,22 @@ export const profilePosts = async (req, res) => {
 export const getNotificationNumber = async (req, res) => {
   const tokenUserId = req.userId;
   try {
-    const number = await prisma.chat.count({
+    const chats = await prisma.chat.findMany({
       where: {
         userIDs: {
-          hasSome: [tokenUserId],
-        },
-        NOT: {
-          seenBy: {
-            hasSome: [tokenUserId],
-          },
+          has: tokenUserId,
         },
       },
+      select: {
+        seenBy: true,
+      },
     });
+
+    const number = chats.reduce((count, chat) => {
+      const seenBy = Array.isArray(chat.seenBy) ? chat.seenBy : [];
+      return seenBy.includes(tokenUserId) ? count : count + 1;
+    }, 0);
+
     res.status(200).json(number);
   } catch (err) {
     console.log(err);
