@@ -1,17 +1,17 @@
 import "./register.scss";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { useState } from "react";
 import apiRequest from "../../lib/apiRequest";
 
 function Register() {
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-
-  const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
+    setSuccess("");
     setIsLoading(true);
 
     const formData = new FormData(e.target);
@@ -36,13 +36,16 @@ function Register() {
     }
 
     try {
-      await apiRequest.post("/auth/register", {
+      const res = await apiRequest.post("/auth/register", {
         username,
         email,
         password,
       });
-
-      navigate("/login");
+      setSuccess(
+        res.data?.message ||
+          "Registration successful. Check your email for your magic link."
+      );
+      e.target.reset();
     } catch (err) {
       setError(err.response?.data?.message || "Failed to create user!");
     } finally {
@@ -83,6 +86,7 @@ function Register() {
           />
           <button disabled={isLoading}>Register</button>
           {error && <span>{error}</span>}
+          {success && <span>{success}</span>}
           <Link to="/login">Do you have an account?</Link>
         </form>
       </div>
