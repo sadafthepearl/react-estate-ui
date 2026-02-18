@@ -26,6 +26,37 @@ const JWT_AGE_MS = 1000 * 60 * 60 * 24 * 7;
 const sha256Hex = (value) =>
   crypto.createHash("sha256").update(value).digest("hex");
 
+const issueEmailCode = async (userId) => {
+  const code = crypto.randomInt(100000, 999999).toString();
+  const expires = new Date(Date.now() + EMAIL_CODE_EXP_MINUTES * 60 * 1000);
+
+  await prisma.user.update({
+    where: { id: userId },
+    data: { emailLoginCode: code, emailLoginExpires: expires },
+  });
+
+  return { code };
+};
+
+const issueMagicLink = async (userId) => {
+  const token = crypto.randomBytes(32).toString("hex");
+  const tokenId = sha256Hex(token);
+  const hashedToken = await bcrypt.hash(token, 10);
+
+  await prisma.user.update({
+    where: { id: userId },
+    data: {
+      magicLoginToken: hashedToken,
+      magicLoginTokenId: tokenId,
+      magicLoginExpires: new Date(Date.now() + MAGIC_LINK_EXP_MINUTES * 60 * 1000),
+    },
+  });
+
+  return `${process.env.API_URL}/auth/magic-link/consume?token=${encodeURIComponent(
+    token,
+  )}`;
+};
+
 const setAuthCookie = (res, token) => {
   // NOTE: For production you likely want secure:true.
   // If you're testing on http://localhost, secure:true will prevent the cookie from being set.
@@ -48,13 +79,7 @@ export const loginWithEmail = async (req, res) => {
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user) return res.status(404).json({ message: "User not found" });
 
-    const code = crypto.randomInt(100000, 999999).toString();
-    const expires = new Date(Date.now() + EMAIL_CODE_EXP_MINUTES * 60 * 1000);
-
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { emailLoginCode: code, emailLoginExpires: expires },
-    });
+    const { code } = await issueEmailCode(user.id);
 
     await transporter.sendMail({
       from: process.env.MAIL_FROM,
@@ -111,7 +136,7 @@ export const register = async (req, res) => {
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    await prisma.user.create({
+    const user = await prisma.user.create({
       data: {
         username,
         email,
@@ -119,7 +144,30 @@ export const register = async (req, res) => {
       },
     });
 
-    res.status(201).json({ message: "User created successfully!" });
+    try {
+      const [{ code }, magicLink] = await Promise.all([
+        issueEmailCode(user.id),
+        issueMagicLink(user.id),
+      ]);
+
+      await transporter.sendMail({
+        from: process.env.MAIL_FROM,
+        to: email,
+        subject: "Welcome to EstateUI - sign in",
+        html: `
+          <p>Your account was created successfully.</p>
+          <p>Login code: <b>${code}</b> (expires in ${EMAIL_CODE_EXP_MINUTES} minutes)</p>
+          <p>Or use this magic link (expires in ${MAGIC_LINK_EXP_MINUTES} minutes):</p>
+          <a href="${magicLink}">Sign in</a>
+        `,
+      });
+    } catch (mailErr) {
+      console.error("Register email delivery failed:", mailErr);
+    }
+
+    res.status(201).json({
+      message: "User created successfully! Check your email for code and magic link.",
+    });
   } catch (err) {
     console.error("Prisma Error:", err);
     res.status(500).json({ message: "Failed to create user!" });
@@ -127,32 +175,12 @@ export const register = async (req, res) => {
 };
 
 export const sendMagicLink = async (req, res) => {
-  const { email } = req.body;
+  const email = req.body?.email || req.query?.email;
 
   try {
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user) return res.status(404).json({ message: "User not found!" });
-
-    const token = crypto.randomBytes(32).toString("hex");
-
-    const tokenId = sha256Hex(token);
-
-    const hashedToken = await bcrypt.hash(token, 10);
-
-    await prisma.user.update({
-      where: { id: user.id },
-      data: {
-        magicLoginToken: hashedToken,
-        magicLoginTokenId: tokenId,
-        magicLoginExpires: new Date(
-          Date.now() + MAGIC_LINK_EXP_MINUTES * 60 * 1000,
-        ),
-      },
-    });
-
-    const magicLink = `${
-      process.env.API_URL
-    }/auth/magic-link/consume?token=${encodeURIComponent(token)}`;
+    const magicLink = await issueMagicLink(user.id);
 
     await transporter.sendMail({
       from: process.env.MAIL_FROM,
