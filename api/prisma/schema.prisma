@@ -74,7 +74,7 @@ model User {
   twoFactorEnabled Boolean @default(false)
 
   magicLoginToken   String?
-  magicLoginTokenId String?   @unique
+  magicLoginTokenId String?
   magicLoginExpires DateTime?
 
   emailLoginCode    String?
