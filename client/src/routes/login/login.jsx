@@ -24,6 +24,7 @@ function Login() {
     const requires = searchParams.get("requires2FA");
     const incomingUserId = searchParams.get("userId");
     const magicLinkError = searchParams.get("error");
+    const magicSuccess = searchParams.get("magic");
 
     if (requires === "true" && incomingUserId) {
       setRequires2FA(true);
@@ -33,6 +34,10 @@ function Login() {
     if (magicLinkError) {
       setError("Magic link is invalid or expired. Request a new one.");
       setMode("magicLink");
+    }
+
+    if (magicSuccess === "success") {
+      setMessage("Magic link verified. You can continue from here.");
     }
   }, [searchParams]);
 
