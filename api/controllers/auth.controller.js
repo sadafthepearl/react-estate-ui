@@ -226,7 +226,7 @@ export const sendMagicLink = async (req, res) => {
 // NEW: user clicks email link -> logs in
 export const consumeMagicLink = async (req, res) => {
   try {
-    const token = String(req.query.token || "");
+    const token = String(req.query.token || req.params.token || "");
     if (!token || token.length < 20) {
       return res.redirect(`${process.env.APP_URL}/login?error=invalid_link`);
     }

@@ -24,6 +24,7 @@ router.post("/verify-email-code", verifyEmailCode);
 router.get("/magic-link", sendMagicLink);
 
 router.get("/magic-link/consume", consumeMagicLink);
+router.get("/magic-link/:token", consumeMagicLink);
 
 router.post("/magic-link", sendMagicLink);
 
