@@ -26,6 +26,12 @@ const JWT_AGE_MS = 1000 * 60 * 60 * 24 * 7;
 const sha256Hex = (value) =>
   crypto.createHash("sha256").update(value).digest("hex");
 
+const getApiBaseUrl = () => {
+  const raw = String(process.env.API_URL || "").replace(/\/+$/, "");
+  if (!raw) return "";
+  return raw.endsWith("/api") ? raw : `${raw}/api`;
+};
+
 const issueEmailCode = async (userId) => {
   const code = crypto.randomInt(100000, 999999).toString();
   const expires = new Date(Date.now() + EMAIL_CODE_EXP_MINUTES * 60 * 1000);
@@ -52,9 +58,8 @@ const issueMagicLink = async (userId) => {
     },
   });
 
-  return `${process.env.API_URL}/auth/magic-link/consume?token=${encodeURIComponent(
-    token,
-  )}`;
+  const apiBase = getApiBaseUrl();
+  return `${apiBase}/auth/magic-link/consume?token=${encodeURIComponent(token)}`;
 };
 
 const setAuthCookie = (res, token) => {
