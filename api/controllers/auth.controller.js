@@ -16,6 +16,31 @@ const transporter = nodemailer.createTransport({
   },
 });
 
+// Helpers
+const EMAIL_CODE_EXP_MINUTES = Number(process.env.EMAIL_CODE_EXP_MINUTES || 10);
+const MAGIC_LINK_EXP_MINUTES = Number(process.env.MAGIC_LINK_EXP_MINUTES || 10);
+
+// 7 days in ms (your existing logic)
+const JWT_AGE_MS = 1000 * 60 * 60 * 24 * 7;
+
+const sha256Hex = (value) =>
+  crypto.createHash("sha256").update(value).digest("hex");
+
+const setAuthCookie = (res, token) => {
+  // NOTE: For production you likely want secure:true.
+  // If you're testing on http://localhost, secure:true will prevent the cookie from being set.
+  const isProd = process.env.NODE_ENV === "production";
+
+  res.cookie("token", token, {
+    httpOnly: true,
+    maxAge: JWT_AGE_MS,
+    secure: isProd, // set to true on HTTPS
+    sameSite: "lax",
+    // If you use subdomains, you may need:
+    // domain: process.env.COOKIE_DOMAIN || undefined,
+  });
+};
+
 export const loginWithEmail = async (req, res) => {
   const { email } = req.body;
 
@@ -24,7 +49,7 @@ export const loginWithEmail = async (req, res) => {
     if (!user) return res.status(404).json({ message: "User not found" });
 
     const code = crypto.randomInt(100000, 999999).toString();
-    const expires = new Date(Date.now() + 10 * 60 * 1000);
+    const expires = new Date(Date.now() + EMAIL_CODE_EXP_MINUTES * 60 * 1000);
 
     await prisma.user.update({
       where: { id: user.id },
@@ -35,7 +60,7 @@ export const loginWithEmail = async (req, res) => {
       from: process.env.MAIL_FROM,
       to: email,
       subject: "Your login code",
-      html: `<p>Your login code is: <b>${code}</b></p><p>Expires in 10 minutes.</p>`,
+      html: `<p>Your login code is: <b>${code}</b></p><p>Expires in ${EMAIL_CODE_EXP_MINUTES} minutes.</p>`,
     });
 
     res.json({ message: "Login code sent" });
@@ -64,16 +89,16 @@ export const verifyEmailCode = async (req, res) => {
       data: { emailLoginCode: null, emailLoginExpires: null },
     });
 
-    const age = 1000 * 60 * 60 * 24 * 7;
     const token = jwt.sign(
       { id: user.id, isAdmin: false },
       process.env.JWT_SECRET_KEY,
-      { expiresIn: age }
+      { expiresIn: JWT_AGE_MS },
     );
 
     const { password, ...userInfo } = user;
 
-    res.cookie("token", token, { httpOnly: true, maxAge: age }).json(userInfo);
+    setAuthCookie(res, token);
+    res.json(userInfo);
   } catch (e) {
     console.error(e);
     res.status(500).json({ message: "Login failed" });
@@ -86,7 +111,7 @@ export const register = async (req, res) => {
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const newUser = await prisma.user.create({
+    await prisma.user.create({
       data: {
         username,
         email,
@@ -109,17 +134,25 @@ export const sendMagicLink = async (req, res) => {
     if (!user) return res.status(404).json({ message: "User not found!" });
 
     const token = crypto.randomBytes(32).toString("hex");
+
+    const tokenId = sha256Hex(token);
+
     const hashedToken = await bcrypt.hash(token, 10);
 
     await prisma.user.update({
       where: { id: user.id },
       data: {
         magicLoginToken: hashedToken,
-        magicLoginExpires: new Date(Date.now() + 10 * 60 * 1000),
+        magicLoginTokenId: tokenId,
+        magicLoginExpires: new Date(
+          Date.now() + MAGIC_LINK_EXP_MINUTES * 60 * 1000,
+        ),
       },
     });
 
-    const magicLink = `${process.env.APP_URL}/auth/magic-login?token=${token}`;
+    const magicLink = `${
+      process.env.API_URL
+    }/auth/magic-link/consume?token=${encodeURIComponent(token)}`;
 
     await transporter.sendMail({
       from: process.env.MAIL_FROM,
@@ -127,8 +160,8 @@ export const sendMagicLink = async (req, res) => {
       subject: "Your magic login link",
       html: `
         <p>Click the link below to log in:</p>
-        <a href="${magicLink}">${magicLink}</a>
-        <p>This link expires in 10 minutes.</p>
+        <a href="${magicLink}">Sign in</a>
+        <p>This link expires in ${MAGIC_LINK_EXP_MINUTES} minutes.</p>
       `,
     });
 
@@ -136,6 +169,71 @@ export const sendMagicLink = async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Failed to send magic link!" });
+  }
+};
+
+// NEW: user clicks email link -> logs in
+export const consumeMagicLink = async (req, res) => {
+  try {
+    const token = String(req.query.token || "");
+    if (!token || token.length < 20) {
+      return res.redirect(`${process.env.APP_URL}/login?error=invalid_link`);
+    }
+
+    const tokenId = sha256Hex(token);
+
+    // Find user by tokenId + not expired
+    const user = await prisma.user.findFirst({
+      where: {
+        magicLoginTokenId: tokenId,
+        magicLoginExpires: { gt: new Date() },
+      },
+    });
+
+    if (!user || !user.magicLoginToken) {
+      return res.redirect(`${process.env.APP_URL}/login?error=expired_or_used`);
+    }
+
+    // Verify token against stored bcrypt hash (extra safety)
+    const ok = await bcrypt.compare(token, user.magicLoginToken);
+    if (!ok) {
+      return res.redirect(`${process.env.APP_URL}/login?error=expired_or_used`);
+    }
+
+    // One-time use: clear fields immediately
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        magicLoginToken: null,
+        magicLoginTokenId: null,
+        magicLoginExpires: null,
+      },
+    });
+
+    // If 2FA is enabled, require it (mirror your password login behavior)
+    if (user.twoFactorEnabled) {
+      // Note: redirecting because this is a GET from email.
+      // Your frontend can read query params and continue 2FA flow.
+      return res.redirect(
+        `${
+          process.env.APP_URL
+        }/login?requires2FA=true&userId=${encodeURIComponent(user.id)}`,
+      );
+    }
+
+    const jwtToken = jwt.sign(
+      { id: user.id, isAdmin: false },
+      process.env.JWT_SECRET_KEY,
+      { expiresIn: JWT_AGE_MS },
+    );
+
+    setAuthCookie(res, jwtToken);
+
+    // Redirect user into the app
+    return res.redirect(`${process.env.APP_URL}/`);
+  } catch (e) {
+    console.error(e);
+    return res.redirect(`${process.env.APP_URL}/login?error=server_error`);
   }
 };
 
@@ -166,27 +264,16 @@ export const login = async (req, res) => {
       });
     }
 
-    // Normal login without 2FA
-    const age = 1000 * 60 * 60 * 24 * 7;
-
     const token = jwt.sign(
-      {
-        id: user.id,
-        isAdmin: false,
-      },
+      { id: user.id, isAdmin: false },
       process.env.JWT_SECRET_KEY,
-      { expiresIn: age }
+      { expiresIn: JWT_AGE_MS },
     );
 
     const { password: userPassword, ...userInfo } = user;
 
-    res
-      .cookie("token", token, {
-        httpOnly: true,
-        maxAge: age,
-      })
-      .status(200)
-      .json(userInfo);
+    setAuthCookie(res, token);
+    res.status(200).json(userInfo);
   } catch (err) {
     console.error("Login error:", err);
     res.status(500).json({ message: "Failed to login!" });
@@ -197,18 +284,15 @@ export const enable2FA = async (req, res) => {
   try {
     const userId = req.userId;
 
-    // Generate secret
     const secret = speakeasy.generateSecret({
       name: `EstateUI (${userId})`,
     });
 
-    // Save secret to database
     await prisma.user.update({
       where: { id: userId },
       data: { twoFactorSecret: secret.base32 },
     });
 
-    // Generate QR code
     const qrCodeUrl = await qrcode.toDataURL(secret.otpauth_url);
 
     res.status(200).json({
@@ -267,25 +351,16 @@ export const verifyLogin2FA = async (req, res) => {
     });
 
     if (verified) {
-      const age = 1000 * 60 * 60 * 24 * 7;
       const jwtToken = jwt.sign(
-        {
-          id: user.id,
-          isAdmin: false,
-        },
+        { id: user.id, isAdmin: false },
         process.env.JWT_SECRET_KEY,
-        { expiresIn: age }
+        { expiresIn: JWT_AGE_MS },
       );
 
       const { password: userPassword, ...userInfo } = user;
 
-      res
-        .cookie("token", jwtToken, {
-          httpOnly: true,
-          maxAge: age,
-        })
-        .status(200)
-        .json(userInfo);
+      setAuthCookie(res, jwtToken);
+      res.status(200).json(userInfo);
     } else {
       res.status(400).json({ message: "Invalid 2FA token!" });
     }
