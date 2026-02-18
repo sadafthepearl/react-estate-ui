@@ -170,6 +170,18 @@ export const register = async (req, res) => {
     });
   } catch (err) {
     console.error("Prisma Error:", err);
+    if (err?.code === "P2002") {
+      const target = Array.isArray(err?.meta?.target)
+        ? err.meta.target.join(",")
+        : String(err?.meta?.target || "");
+
+      if (target.includes("email")) {
+        return res.status(409).json({ message: "Email already exists!" });
+      }
+      if (target.includes("username")) {
+        return res.status(409).json({ message: "Username already exists!" });
+      }
+    }
     res.status(500).json({ message: "Failed to create user!" });
   }
 };
