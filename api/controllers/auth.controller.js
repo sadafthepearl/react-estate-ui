@@ -39,6 +39,19 @@ const getApiBaseUrl = (req) => {
   return `${protocol}://${host}/api`;
 };
 
+const getAppBaseUrl = (req) => {
+  const raw = String(process.env.APP_URL || "").replace(/\/+$/, "");
+  if (raw) return raw;
+
+  const forwardedProto = String(req?.headers?.["x-forwarded-proto"] || "")
+    .split(",")[0]
+    .trim();
+  const protocol = forwardedProto || req?.protocol || "http";
+  const host = req?.get?.("host");
+  if (!host) return "";
+  return `${protocol}://${host}`;
+};
+
 const issueEmailCode = async (userId) => {
   const code = crypto.randomInt(100000, 999999).toString();
   const expires = new Date(Date.now() + EMAIL_CODE_EXP_MINUTES * 60 * 1000);
@@ -227,8 +240,13 @@ export const sendMagicLink = async (req, res) => {
 export const consumeMagicLink = async (req, res) => {
   try {
     const token = String(req.query.token || req.params.token || "");
+    const appBase = getAppBaseUrl(req);
+    if (!appBase) {
+      return res.status(500).send("APP_URL is not configured");
+    }
+
     if (!token || token.length < 20) {
-      return res.redirect(`${process.env.APP_URL}/login?error=invalid_link`);
+      return res.redirect(`${appBase}/login?error=invalid_link`);
     }
 
     const tokenId = sha256Hex(token);
@@ -242,13 +260,13 @@ export const consumeMagicLink = async (req, res) => {
     });
 
     if (!user || !user.magicLoginToken) {
-      return res.redirect(`${process.env.APP_URL}/login?error=expired_or_used`);
+      return res.redirect(`${appBase}/login?error=expired_or_used`);
     }
 
     // Verify token against stored bcrypt hash (extra safety)
     const ok = await bcrypt.compare(token, user.magicLoginToken);
     if (!ok) {
-      return res.redirect(`${process.env.APP_URL}/login?error=expired_or_used`);
+      return res.redirect(`${appBase}/login?error=expired_or_used`);
     }
 
     // One-time use: clear fields immediately
@@ -266,9 +284,7 @@ export const consumeMagicLink = async (req, res) => {
       // Note: redirecting because this is a GET from email.
       // Your frontend can read query params and continue 2FA flow.
       return res.redirect(
-        `${
-          process.env.APP_URL
-        }/login?requires2FA=true&userId=${encodeURIComponent(user.id)}`,
+        `${appBase}/login?requires2FA=true&userId=${encodeURIComponent(user.id)}`,
       );
     }
 
@@ -280,11 +296,13 @@ export const consumeMagicLink = async (req, res) => {
 
     setAuthCookie(res, jwtToken);
 
-    // Redirect user into the app
-    return res.redirect(`${process.env.APP_URL}/`);
+    // Redirect to login page after magic-link authentication.
+    return res.redirect(`${appBase}/login?magic=success`);
   } catch (e) {
     console.error(e);
-    return res.redirect(`${process.env.APP_URL}/login?error=server_error`);
+    const appBase = getAppBaseUrl(req);
+    if (!appBase) return res.status(500).send("APP_URL is not configured");
+    return res.redirect(`${appBase}/login?error=server_error`);
   }
 };
 
