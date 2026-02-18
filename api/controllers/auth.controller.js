@@ -26,10 +26,17 @@ const JWT_AGE_MS = 1000 * 60 * 60 * 24 * 7;
 const sha256Hex = (value) =>
   crypto.createHash("sha256").update(value).digest("hex");
 
-const getApiBaseUrl = () => {
+const getApiBaseUrl = (req) => {
   const raw = String(process.env.API_URL || "").replace(/\/+$/, "");
-  if (!raw) return "";
-  return raw.endsWith("/api") ? raw : `${raw}/api`;
+  if (raw) return raw.endsWith("/api") ? raw : `${raw}/api`;
+
+  const forwardedProto = String(req?.headers?.["x-forwarded-proto"] || "")
+    .split(",")[0]
+    .trim();
+  const protocol = forwardedProto || req?.protocol || "http";
+  const host = req?.get?.("host");
+  if (!host) return "";
+  return `${protocol}://${host}/api`;
 };
 
 const issueEmailCode = async (userId) => {
@@ -44,7 +51,7 @@ const issueEmailCode = async (userId) => {
   return { code };
 };
 
-const issueMagicLink = async (userId) => {
+const issueMagicLink = async (userId, req) => {
   const token = crypto.randomBytes(32).toString("hex");
   const tokenId = sha256Hex(token);
   const hashedToken = await bcrypt.hash(token, 10);
@@ -58,7 +65,10 @@ const issueMagicLink = async (userId) => {
     },
   });
 
-  const apiBase = getApiBaseUrl();
+  const apiBase = getApiBaseUrl(req);
+  if (!apiBase) {
+    throw new Error("Unable to build API base URL for magic link");
+  }
   return `${apiBase}/auth/magic-link/consume?token=${encodeURIComponent(token)}`;
 };
 
@@ -150,10 +160,7 @@ export const register = async (req, res) => {
     });
 
     try {
-      const [{ code }, magicLink] = await Promise.all([
-        issueEmailCode(user.id),
-        issueMagicLink(user.id),
-      ]);
+      const magicLink = await issueMagicLink(user.id, req);
 
       await transporter.sendMail({
         from: process.env.MAIL_FROM,
@@ -161,8 +168,7 @@ export const register = async (req, res) => {
         subject: "Welcome to EstateUI - sign in",
         html: `
           <p>Your account was created successfully.</p>
-          <p>Login code: <b>${code}</b> (expires in ${EMAIL_CODE_EXP_MINUTES} minutes)</p>
-          <p>Or use this magic link (expires in ${MAGIC_LINK_EXP_MINUTES} minutes):</p>
+          <p>Use this magic link to sign in (expires in ${MAGIC_LINK_EXP_MINUTES} minutes):</p>
           <a href="${magicLink}">Sign in</a>
         `,
       });
@@ -171,7 +177,7 @@ export const register = async (req, res) => {
     }
 
     res.status(201).json({
-      message: "User created successfully! Check your email for code and magic link.",
+      message: "User created successfully! Check your email for your magic link.",
     });
   } catch (err) {
     console.error("Prisma Error:", err);
@@ -197,7 +203,7 @@ export const sendMagicLink = async (req, res) => {
   try {
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user) return res.status(404).json({ message: "User not found!" });
-    const magicLink = await issueMagicLink(user.id);
+    const magicLink = await issueMagicLink(user.id, req);
 
     await transporter.sendMail({
       from: process.env.MAIL_FROM,
