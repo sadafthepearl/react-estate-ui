@@ -14,7 +14,6 @@ function Login() {
   const [mode, setMode] = useState("password");
   const [email, setEmail] = useState("");
   const [emailCode, setEmailCode] = useState("");
-  const [isAllowed, setIsAllowed] = useState(false);
 
   const { updateUser } = useContext(AuthContext);
 
@@ -26,20 +25,6 @@ function Login() {
     const incomingUserId = searchParams.get("userId");
     const magicLinkError = searchParams.get("error");
     const magicSuccess = searchParams.get("magic");
-    const fromEmail = searchParams.get("from");
-    const allowed =
-      (requires === "true" && Boolean(incomingUserId)) ||
-      Boolean(magicLinkError) ||
-      magicSuccess === "success" ||
-      fromEmail === "true";
-
-    if (!allowed) {
-      navigate("/register", { replace: true });
-      return;
-    }
-
-    setIsAllowed(true);
-
     if (requires === "true" && incomingUserId) {
       setRequires2FA(true);
       setUserId(incomingUserId);
@@ -53,7 +38,7 @@ function Login() {
     if (magicSuccess === "success") {
       setMessage("Magic link verified. You can continue from here.");
     }
-  }, [navigate, searchParams]);
+  }, [searchParams]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -160,8 +145,6 @@ function Login() {
       setIsLoading(false);
     }
   };
-
-  if (!isAllowed) return null;
 
   if (requires2FA) {
 
