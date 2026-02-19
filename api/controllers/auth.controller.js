@@ -173,7 +173,10 @@ export const register = async (req, res) => {
     });
 
     try {
-      const magicLink = await issueMagicLink(user.id, req);
+      const [{ code }, magicLink] = await Promise.all([
+        issueEmailCode(user.id),
+        issueMagicLink(user.id, req),
+      ]);
 
       await transporter.sendMail({
         from: process.env.MAIL_FROM,
@@ -181,7 +184,8 @@ export const register = async (req, res) => {
         subject: "Welcome to EstateUI - sign in",
         html: `
           <p>Your account was created successfully.</p>
-          <p>Use this magic link to sign in (expires in ${MAGIC_LINK_EXP_MINUTES} minutes):</p>
+          <p>Your one-time login code (expires in ${EMAIL_CODE_EXP_MINUTES} minutes): <b>${code}</b></p>
+          <p>Or use this magic link to sign in (expires in ${MAGIC_LINK_EXP_MINUTES} minutes):</p>
           <a href="${magicLink}">Sign in</a>
         `,
       });
@@ -190,7 +194,7 @@ export const register = async (req, res) => {
     }
 
     res.status(201).json({
-      message: "User created successfully! Check your email for your magic link.",
+      message: "User created successfully! Check your email for your login code and magic link.",
     });
   } catch (err) {
     console.error("Prisma Error:", err);
