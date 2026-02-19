@@ -296,8 +296,8 @@ export const consumeMagicLink = async (req, res) => {
 
     setAuthCookie(res, jwtToken);
 
-    // Redirect to login page after magic-link authentication.
-    return res.redirect(`${appBase}/login?magic=success`);
+    // Redirect directly to home page after magic-link authentication.
+    return res.redirect(`${appBase}/`);
   } catch (e) {
     console.error(e);
     const appBase = getAppBaseUrl(req);
