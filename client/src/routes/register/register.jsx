@@ -87,7 +87,7 @@ function Register() {
           <button disabled={isLoading}>Register</button>
           {error && <span>{error}</span>}
           {success && <span>{success}</span>}
-          <Link to="/login">Do you have an account?</Link>
+          <Link to="/">Back to Home</Link>
         </form>
       </div>
       <div className="imgContainer">

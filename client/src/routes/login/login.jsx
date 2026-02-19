@@ -14,6 +14,7 @@ function Login() {
   const [mode, setMode] = useState("password");
   const [email, setEmail] = useState("");
   const [emailCode, setEmailCode] = useState("");
+  const [isAllowed, setIsAllowed] = useState(false);
 
   const { updateUser } = useContext(AuthContext);
 
@@ -25,6 +26,19 @@ function Login() {
     const incomingUserId = searchParams.get("userId");
     const magicLinkError = searchParams.get("error");
     const magicSuccess = searchParams.get("magic");
+    const fromEmail = searchParams.get("from");
+    const allowed =
+      (requires === "true" && Boolean(incomingUserId)) ||
+      Boolean(magicLinkError) ||
+      magicSuccess === "success" ||
+      fromEmail === "true";
+
+    if (!allowed) {
+      navigate("/register", { replace: true });
+      return;
+    }
+
+    setIsAllowed(true);
 
     if (requires === "true" && incomingUserId) {
       setRequires2FA(true);
@@ -39,7 +53,7 @@ function Login() {
     if (magicSuccess === "success") {
       setMessage("Magic link verified. You can continue from here.");
     }
-  }, [searchParams]);
+  }, [navigate, searchParams]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -147,6 +161,8 @@ function Login() {
     }
   };
 
+  if (!isAllowed) return null;
+
   if (requires2FA) {
 
     return (
@@ -190,10 +206,28 @@ function Login() {
       <div className="formContainer">
         <h1>Welcome Back</h1>
 
-        <div style={{ display: "flex", gap: "8px", marginBottom: "12px", flexWrap: "wrap" }}>
-          <button type="button" onClick={() => setMode("password")}>Password</button>
-          <button type="button" onClick={() => setMode("emailCode")}>Email Code</button>
-          <button type="button" onClick={() => setMode("magicLink")}>Magic Link</button>
+        <div className="authModeTabs">
+          <button
+            type="button"
+            className={mode === "password" ? "active" : ""}
+            onClick={() => setMode("password")}
+          >
+            Password
+          </button>
+          <button
+            type="button"
+            className={mode === "emailCode" ? "active" : ""}
+            onClick={() => setMode("emailCode")}
+          >
+            Email Code
+          </button>
+          <button
+            type="button"
+            className={mode === "magicLink" ? "active" : ""}
+            onClick={() => setMode("magicLink")}
+          >
+            Magic Link
+          </button>
         </div>
 
         {mode === "password" && (
@@ -254,9 +288,9 @@ function Login() {
           </form>
         )}
 
-        {error && <span>{error}</span>}
-        {message && <span>{message}</span>}
-        <Link to="/register">{"Don't"} you have an account</Link>
+        {error && <span className="status error">{error}</span>}
+        {message && <span className="status success">{message}</span>}
+        <Link to="/register">Back to Register</Link>
       </div>
       <div className="imgContainer">
         <img src="/bg.png" alt="" />

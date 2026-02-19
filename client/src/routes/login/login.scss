@@ -35,16 +35,48 @@
         }
       }
 
-      span{
-        color: rgba(255, 0, 0, 0.591);
-      }
-
       a{
         font-size: 14px;
         color: gray;
         border-bottom: 1px solid gray;
         width: max-content;
       }
+    }
+
+    .authModeTabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 18px;
+
+      button {
+        padding: 10px 14px;
+        border-radius: 999px;
+        border: 1px solid #c8d0d5;
+        background: white;
+        color: #3b4a54;
+        font-weight: 600;
+      }
+
+      .active {
+        background: teal;
+        color: white;
+        border-color: teal;
+      }
+    }
+
+    .status {
+      display: block;
+      margin-top: 12px;
+      font-size: 14px;
+    }
+
+    .status.error {
+      color: rgba(255, 0, 0, 0.75);
+    }
+
+    .status.success {
+      color: #14725f;
     }
   }
 
