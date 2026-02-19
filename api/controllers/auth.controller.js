@@ -85,15 +85,25 @@ const issueMagicLink = async (userId, req) => {
   return `${apiBase}/auth/magic-link/consume?token=${encodeURIComponent(token)}`;
 };
 
-const setAuthCookie = (res, token) => {
-  // NOTE: For production you likely want secure:true.
-  // If you're testing on http://localhost, secure:true will prevent the cookie from being set.
+const shouldUseSecureCookie = (req) => {
+  if (process.env.COOKIE_SECURE === "true") return true;
+  if (process.env.COOKIE_SECURE === "false") return false;
+
+  const forwardedProto = String(req?.headers?.["x-forwarded-proto"] || "")
+    .split(",")[0]
+    .trim();
+  const isHttps = forwardedProto === "https" || Boolean(req?.secure);
   const isProd = process.env.NODE_ENV === "production";
+  return isProd ? isHttps : false;
+};
+
+const setAuthCookie = (req, res, token) => {
+  const secure = shouldUseSecureCookie(req);
 
   res.cookie("token", token, {
     httpOnly: true,
     maxAge: JWT_AGE_MS,
-    secure: isProd, // set to true on HTTPS
+    secure,
     sameSite: "lax",
     // If you use subdomains, you may need:
     // domain: process.env.COOKIE_DOMAIN || undefined,
@@ -150,7 +160,7 @@ export const verifyEmailCode = async (req, res) => {
 
     const { password, ...userInfo } = user;
 
-    setAuthCookie(res, token);
+    setAuthCookie(req, res, token);
     res.json(userInfo);
   } catch (e) {
     console.error(e);
@@ -294,7 +304,7 @@ export const consumeMagicLink = async (req, res) => {
       { expiresIn: JWT_AGE_MS },
     );
 
-    setAuthCookie(res, jwtToken);
+    setAuthCookie(req, res, jwtToken);
 
     // Redirect directly to home page after magic-link authentication.
     return res.redirect(`${appBase}/`);
@@ -341,7 +351,7 @@ export const login = async (req, res) => {
 
     const { password: userPassword, ...userInfo } = user;
 
-    setAuthCookie(res, token);
+    setAuthCookie(req, res, token);
     res.status(200).json(userInfo);
   } catch (err) {
     console.error("Login error:", err);
@@ -428,7 +438,7 @@ export const verifyLogin2FA = async (req, res) => {
 
       const { password: userPassword, ...userInfo } = user;
 
-      setAuthCookie(res, jwtToken);
+      setAuthCookie(req, res, jwtToken);
       res.status(200).json(userInfo);
     } else {
       res.status(400).json({ message: "Invalid 2FA token!" });
