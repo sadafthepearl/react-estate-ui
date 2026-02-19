@@ -42,7 +42,7 @@ function Navbar() {
           </div>
         ) : (
           <>
-            <a href='/login?from=true'>Sign in</a>
+            <a href='/login'>Sign in</a>
             <a href='/register' className="register">
               Sign up
             </a>
@@ -58,7 +58,7 @@ function Navbar() {
           <a href='/'>About</a>
           <a href='/'>Contact</a>
           <a href='/'>Agents</a>
-          <a href='/login?from=true'>Sign in</a>
+          <a href='/login'>Sign in</a>
           <a href='/register'>Sign up</a>
         </div>
       </div>

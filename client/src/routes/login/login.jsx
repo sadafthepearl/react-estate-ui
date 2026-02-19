@@ -13,7 +13,6 @@ function Login() {
   const [twoFactorToken, setTwoFactorToken] = useState("");
   const [mode, setMode] = useState("password");
   const [email, setEmail] = useState("");
-  const [emailCode, setEmailCode] = useState("");
 
   const { updateUser } = useContext(AuthContext);
 
@@ -94,42 +93,6 @@ function Login() {
     }
   };
 
-  const handleRequestCode = async (e) => {
-    e.preventDefault();
-    setError("");
-    setMessage("");
-    setIsLoading(true);
-
-    try {
-      await apiRequest.post("/auth/login-email", { email });
-      setMessage("Code sent. Check your email.");
-    } catch (err) {
-      setError(err.response?.data?.message || "Failed to send code.");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleVerifyCode = async (e) => {
-    e.preventDefault();
-    setError("");
-    setMessage("");
-    setIsLoading(true);
-
-    try {
-      const res = await apiRequest.post("/auth/verify-email-code", {
-        email,
-        code: emailCode,
-      });
-      updateUser(res.data);
-      navigate("/");
-    } catch (err) {
-      setError(err.response?.data?.message || "Invalid or expired code.");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const handleSendMagicLink = async (e) => {
     e.preventDefault();
     setError("");
@@ -199,13 +162,6 @@ function Login() {
           </button>
           <button
             type="button"
-            className={mode === "emailCode" ? "active" : ""}
-            onClick={() => setMode("emailCode")}
-          >
-            Email Code
-          </button>
-          <button
-            type="button"
             className={mode === "magicLink" ? "active" : ""}
             onClick={() => setMode("magicLink")}
           >
@@ -231,31 +187,6 @@ function Login() {
             />
             <button disabled={isLoading}>Login</button>
           </form>
-        )}
-
-        {mode === "emailCode" && (
-          <>
-            <form onSubmit={handleRequestCode}>
-              <input
-                type="email"
-                placeholder="Email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-              <button disabled={isLoading}>Send Code</button>
-            </form>
-            <form onSubmit={handleVerifyCode}>
-              <input
-                type="text"
-                placeholder="6-digit code"
-                required
-                value={emailCode}
-                onChange={(e) => setEmailCode(e.target.value)}
-              />
-              <button disabled={isLoading}>Verify Code</button>
-            </form>
-          </>
         )}
 
         {mode === "magicLink" && (
