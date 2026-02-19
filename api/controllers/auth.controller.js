@@ -306,8 +306,8 @@ export const consumeMagicLink = async (req, res) => {
 
     setAuthCookie(req, res, jwtToken);
 
-    // Redirect directly to home page after magic-link authentication.
-    return res.redirect(`${appBase}/`);
+    // Redirect to home page with success flag so UI can confirm verification.
+    return res.redirect(`${appBase}/?magic=success`);
   } catch (e) {
     console.error(e);
     const appBase = getAppBaseUrl(req);
@@ -446,6 +446,22 @@ export const verifyLogin2FA = async (req, res) => {
   } catch (err) {
     console.log(err);
     res.status(500).json({ message: "Failed to verify 2FA!" });
+  }
+};
+
+export const me = async (req, res) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.userId },
+    });
+
+    if (!user) return res.status(404).json({ message: "User not found!" });
+
+    const { password, ...userInfo } = user;
+    return res.status(200).json(userInfo);
+  } catch (err) {
+    console.error("Auth me error:", err);
+    return res.status(500).json({ message: "Failed to fetch current user!" });
   }
 };
 

@@ -6,6 +6,7 @@ import {
   enable2FA,
   verify2FA,
   verifyLogin2FA,
+  me,
   loginWithEmail,
   verifyEmailCode,
   sendMagicLink,
@@ -31,6 +32,7 @@ router.post("/magic-link", sendMagicLink);
 router.post("/enable-2fa", verifyToken, enable2FA);
 router.post("/verify-2fa", verifyToken, verify2FA);
 router.post("/verify-login-2fa", verifyLogin2FA);
+router.get("/me", verifyToken, me);
 
 router.post("/logout", logout);
 
