@@ -18,15 +18,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Configure SSH
+        run: |
+          set -e
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          cat > ~/.ssh/deploy_key <<'EOF'
+          ${{ secrets.VPS_SSH_KEY }}
+          EOF
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H 85.215.173.47 >> ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
       - name: Deploy over SSH
-        uses: appleboy/ssh-action@v1.2.0
-        with:
-          host: 85.215.173.47
-          username: root
-          key: ${{ secrets.VPS_SSH_KEY }}
-          script_stop: true
-          command_timeout: 30m
-          script: |
+        run: |
+          ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes root@85.215.173.47 <<'EOF'
             set -e
 
             # Make sure PATH is available in non-interactive shells.
@@ -172,3 +178,4 @@ jobs:
             fi
 
             echo "Deployment successful for commit $NEW_SHA"
+          EOF
