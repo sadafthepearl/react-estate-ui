@@ -20,7 +20,7 @@ jobs:
 
       - name: Configure SSH
         env:
-        VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
         run: |
           set -e
           mkdir -p ~/.ssh
@@ -33,7 +33,7 @@ jobs:
 
       - name: Deploy over SSH
         run: |
-          ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes StrictHostKeyChecking=yes root@85.215.173.47 <<'EOF'
+          ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes root@85.215.173.47 <<'EOF'
             set -e
 
             # Make sure PATH is available in non-interactive shells.
